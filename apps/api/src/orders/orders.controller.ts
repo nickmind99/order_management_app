@@ -20,7 +20,7 @@ export class OrdersController {
 
   @Get('stats')
   getStats(): Promise<OrderStatsDto> {
-    return this.orders.stats();
+    return this.orders.cachedStats();
   }
 
   @Get('activity')

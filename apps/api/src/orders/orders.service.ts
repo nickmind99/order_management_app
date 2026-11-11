@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@freitty/db';
+import { Redis } from 'ioredis';
 import { operationsTotalCents, orderTotalCents, suppliesTotalCents } from '../common/pricing';
 import { ActivityDto } from './dto/activity.dto';
 import { ActivityPeriod } from './dto/activity-query.dto';
@@ -19,6 +20,8 @@ const TAB_FILTERS: Record<OrderTab, Prisma.OrderWhereInput> = {
 };
 
 const DAY_MS = 86_400_000;
+const STATS_CACHE_KEY = 'orders:stats';
+const STATS_CACHE_TTL_SECONDS = 60;
 const TOP = { parentId: null };
 const OPEN = { ...TOP, status: { not: 'completed' as const } };
 const ACTIVE = { ...TOP, status: { in: ['new' as const, 'in_progress' as const] } };
@@ -58,7 +61,10 @@ function shiftPeriod(period: ActivityPeriod, date: Date, n: number): Date {
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly redis: Redis,
+  ) {}
 
   async findMany(query: OrderListQueryDto): Promise<OrderListDto> {
     const filters: Prisma.OrderWhereInput = {
@@ -177,6 +183,15 @@ export class OrdersService {
       attachments: (order.attachments as unknown as OrderDetailDto['attachments']).map(({ kind, name }) => ({ kind, name })),
       statusHistory: order.statusHistory as unknown as OrderDetailDto['statusHistory'],
     };
+  }
+
+  async cachedStats(): Promise<OrderStatsDto> {
+    const cached = await this.redis.get(STATS_CACHE_KEY).catch(() => null);
+    if (cached) return JSON.parse(cached) as OrderStatsDto;
+
+    const stats = await this.stats();
+    await this.redis.set(STATS_CACHE_KEY, JSON.stringify(stats), 'EX', STATS_CACHE_TTL_SECONDS).catch(() => undefined);
+    return stats;
   }
 
   async stats(): Promise<OrderStatsDto> {
