@@ -1,0 +1,21 @@
+{
+  "name": "freitty",
+  "private": true,
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "db:up": "docker compose up -d --wait db",
+    "db:down": "docker compose down",
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter \"./packages/*\" build && pnpm -r --parallel dev",
+    "typecheck": "pnpm -r typecheck",
+    "db:migrate": "pnpm --filter @freitty/db migrate:dev",
+    "db:studio": "pnpm --filter @freitty/db studio"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3"
+  }
+}
