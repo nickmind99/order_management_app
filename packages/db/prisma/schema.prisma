@@ -106,6 +106,7 @@ model Order {
   subtype       OrderSubtype?
   status        OrderStatus
   alert         String?
+  warning       String?
   nextAction    String?       @map("next_action")
   hubId         String        @map("hub_id") @db.Uuid
   dockId        String?       @map("dock_id") @db.Uuid
