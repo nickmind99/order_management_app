@@ -7,3 +7,174 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum OrderType {
+  cross_dock
+  consolidation
+}
+
+enum OrderSubtype {
+  storage
+  pickup
+}
+
+enum OrderStatus {
+  draft
+  new
+  in_progress
+  completed
+}
+
+enum PalletType {
+  std
+  xl
+}
+
+enum OperationType {
+  unloading
+  disposal
+  restack
+  loading
+}
+
+enum SupplyCategory {
+  securement
+  edge_protect
+  wrap
+}
+
+model Hub {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  region    String
+  address   String
+  docks     Dock[]
+  orders    Order[]
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("hubs")
+}
+
+model Dock {
+  id        String   @id @default(uuid()) @db.Uuid
+  hubId     String   @map("hub_id") @db.Uuid
+  number    Int
+  bay       String
+  hub       Hub      @relation(fields: [hubId], references: [id])
+  orders    Order[]
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([hubId, number])
+  @@map("docks")
+}
+
+model Carrier {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  phone     String
+  trucks    Truck[]
+  orders    Order[]
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("carriers")
+}
+
+model Truck {
+  id            String      @id @default(uuid()) @db.Uuid
+  carrierId     String      @map("carrier_id") @db.Uuid
+  number        String
+  trailerNumber String      @map("trailer_number")
+  trailerType   String      @map("trailer_type")
+  carrier       Carrier     @relation(fields: [carrierId], references: [id])
+  orders        Order[]
+  operations    Operation[]
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("trucks")
+}
+
+model Order {
+  id            String        @id @default(uuid()) @db.Uuid
+  number        String        @unique
+  parentId      String?       @map("parent_id") @db.Uuid
+  refNumber     String?       @map("ref_number")
+  type          OrderType
+  subtype       OrderSubtype?
+  status        OrderStatus
+  hasAlert      Boolean       @default(false) @map("has_alert")
+  alertReason   String?       @map("alert_reason")
+  nextAction    String?       @map("next_action")
+  hubId         String        @map("hub_id") @db.Uuid
+  dockId        String?       @map("dock_id") @db.Uuid
+  date          DateTime      @db.Timestamptz
+  destination   String?
+  customer      String
+  services      String[]
+  carrierId     String?       @map("carrier_id") @db.Uuid
+  truckId       String?       @map("truck_id") @db.Uuid
+  driver        String?
+  palletType    PalletType    @map("pallet_type")
+  declaredQty   Int           @map("declared_qty")
+  actualQty     Int?          @map("actual_qty")
+  warehouseNote String?       @map("warehouse_note")
+  invoiceNumber String?       @map("invoice_number")
+  createdBy     String        @map("created_by")
+  assignedTo    String?       @map("assigned_to")
+  comments      Json          @default("[]")
+  attachments   Json          @default("[]")
+  statusHistory Json          @default("[]") @map("status_history")
+  completedAt   DateTime?     @map("completed_at") @db.Timestamptz
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  parent     Order?      @relation("SubOrders", fields: [parentId], references: [id])
+  subOrders  Order[]     @relation("SubOrders")
+  hub        Hub         @relation(fields: [hubId], references: [id])
+  dock       Dock?       @relation(fields: [dockId], references: [id])
+  carrier    Carrier?    @relation(fields: [carrierId], references: [id])
+  truck      Truck?      @relation(fields: [truckId], references: [id])
+  operations Operation[]
+  supplies   Supply[]
+
+  @@index([hubId, date])
+  @@index([date])
+  @@index([parentId])
+  @@map("orders")
+}
+
+model Operation {
+  id         String        @id @default(uuid()) @db.Uuid
+  orderId    String        @map("order_id") @db.Uuid
+  type       OperationType
+  truckId    String?       @map("truck_id") @db.Uuid
+  qty        Int
+  palletType PalletType    @map("pallet_type")
+  appliedAt  DateTime      @map("applied_at") @db.Timestamptz
+  priceCents Int?          @map("price_cents")
+  order      Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  truck      Truck?        @relation(fields: [truckId], references: [id])
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([orderId])
+  @@map("operations")
+}
+
+model Supply {
+  id             String         @id @default(uuid()) @db.Uuid
+  orderId        String         @map("order_id") @db.Uuid
+  sku            String
+  category       SupplyCategory
+  qty            Int
+  unitPriceCents Int            @map("unit_price_cents")
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([orderId])
+  @@map("supplies")
+}
