@@ -1,10 +1,6 @@
 import { createPrismaClient } from '../src/client';
 import type { Prisma } from '../src/generated/prisma/client';
 
-// Demo data from the mockups. Dates are relative to today: the detail order FR001383
-// ("17 Apr · today" in the mockup) is always today, so "last 30 days" filters show data.
-// Times are UTC. Re-running the seed wipes all tables and inserts the same data again.
-
 const prisma = createPrismaClient(process.env.DATABASE_URL!);
 
 const today = new Date();
@@ -22,7 +18,6 @@ function hoursAfter(date: Date, hours: number): Date {
   return new Date(date.getTime() + hours * 3_600_000);
 }
 
-// Small deterministic random generator, so generated orders are the same on every run.
 function rng(seed: number) {
   return () => {
     seed = (seed + 0x6d2b79f5) | 0;
@@ -38,7 +33,6 @@ const pick = <T>(items: T[]): T => items[int(0, items.length - 1)];
 async function main() {
   await prisma.$executeRaw`TRUNCATE hubs, docks, carriers, trucks, orders, operations, supplies CASCADE`;
 
-  // --- Hubs and docks ---
   const markham = await prisma.hub.create({
     data: {
       name: 'Markham',
@@ -60,7 +54,6 @@ async function main() {
   const dock12 = markham.docks.find((d) => d.number === 12)!;
   const hubs = [markham, toronto];
 
-  // --- Carriers and trucks ---
   const rway = await prisma.carrier.create({
     data: {
       name: 'R-way Transport Inc.',
@@ -99,10 +92,9 @@ async function main() {
   const rwayTruck = rway.trucks[0];
   const [tforceTruck1, tforceTruck2] = tforce.trucks;
 
-  // --- Orders from the mockups ---
+
   const orders: Prisma.OrderUncheckedCreateInput[] = [];
 
-  // Detail screen: FR001383
   const fr1383Date = at(0, '08:30');
   orders.push({
     number: 'FR001383',
@@ -148,7 +140,6 @@ async function main() {
     },
   });
 
-  // FR001676: consolidation, 15 Std + 3 XL in 3 sub-orders on 2 trailers, driver without carrier
   const fr1676Date = at(5, '09:00');
   orders.push({
     number: 'FR001676',
@@ -160,7 +151,7 @@ async function main() {
     destination: 'Toronto, ON',
     customer: 'R-way Transport',
     services: ['Transload'],
-    driver: 'User 5',
+    carrierId: tforce.id,
     palletType: 'std',
     declaredQty: 18,
     createdBy: 'User 1 · Admin',
@@ -173,7 +164,6 @@ async function main() {
     },
   });
 
-  // FR001681: cross-dock storage, new, waiting for truck
   orders.push({
     number: 'FR001681',
     refNumber: 'REF-1004',
@@ -193,7 +183,6 @@ async function main() {
     attachments: [{ kind: 'document', name: 'External PDF', key: 'orders/FR001681/external.pdf' }],
   });
 
-  // FR001674: consolidation, 20 declared / 18 actual. The alert is on sub-order -2, not on the parent
   const fr1674Date = at(4, '11:00');
   orders.push({
     number: 'FR001674',
@@ -218,7 +207,6 @@ async function main() {
     },
   });
 
-  // FR001672: cross-dock pickup, completed and paid, self pickup
   const fr1672Date = at(3, '17:30');
   orders.push({
     number: 'FR001672',
@@ -246,7 +234,6 @@ async function main() {
     },
   });
 
-  // FR001668: consolidation Markham → Toronto, 28 Std in 4 sub-orders, closed
   const fr1668Date = at(6, '10:00');
   orders.push({
     number: 'FR001668',
@@ -264,6 +251,9 @@ async function main() {
     invoiceNumber: '001809',
     createdBy: 'User 4 · Dispatcher',
     completedAt: hoursAfter(fr1668Date, 30),
+    operations: {
+      create: [{ type: 'loading', truckId: tforceTruck2.id, qty: 28, palletType: 'std', appliedAt: hoursAfter(fr1668Date, 28), priceCents: 14000 }],
+    },
     subOrders: {
       create: [
         subOrder('FR001668-1', 'REF-1008', 8, 'std', tforceTruck1.id),
@@ -284,7 +274,6 @@ async function main() {
     },
   });
 
-  // DRAFT-003: unfinished consolidation, no cargo and no carrier yet
   orders.push({
     number: 'DRAFT-003',
     type: 'consolidation',
@@ -297,7 +286,6 @@ async function main() {
     createdBy: 'User 1 · Admin',
   });
 
-  // --- Generated orders to fill the tabs: 18 Cross-Dock, 6 Consolidation, 2 Alerts, 1 Draft ---
   const customers = ['Maple Freight Co.', 'Northline Foods', 'Lakeshore Retail', 'Great Lakes Supply', 'Polar Beverages'];
   const destinations = ['Toronto, ON', 'Ottawa, ON', 'Hamilton, ON', 'Montreal, QC', 'Detroit, MI', 'Buffalo, NY', 'Chicago, IL'];
   const creators = ['User 1 · Admin', 'User 2 · Dispatcher', 'User 3 · Dispatcher', 'User 4 · Dispatcher'];
@@ -305,11 +293,12 @@ async function main() {
 
   for (let i = 0; i < 18; i++) {
     const number = `FR00${1650 + i}`;
-    const isConsolidation = i % 6 === 5; // 3 of 18
-    const active = i >= 15; // last 3 are still in work, the rest are completed
+    const isConsolidation = i % 6 === 5;
+    const active = i >= 15;
     const hub = pick(hubs);
     const carrier = pick(carriers);
     const truck = pick(carrier.trucks);
+    const loadingTruck = active ? null : pick(carrier.trucks);
     const date = active ? at(int(0, 3), `${int(7, 16)}:00`) : at(int(7, 70), `${int(7, 16)}:00`);
     const palletType: 'std' | 'xl' = random() < 0.75 ? 'std' : 'xl';
     const declaredQty = int(6, 26);
@@ -342,6 +331,20 @@ async function main() {
         nextAction: active ? 'Consolidation' : null,
         declaredQty: parts.reduce((a, b) => a + b, 0),
         actualQty: active ? null : parts.reduce((a, b) => a + b, 0),
+        operations: loadingTruck
+          ? {
+              create: [
+                {
+                  type: 'loading',
+                  truckId: loadingTruck.id,
+                  qty: parts.reduce((a, b) => a + b, 0),
+                  palletType,
+                  appliedAt: hoursAfter(date, 2),
+                  priceCents: parts.reduce((a, b) => a + b, 0) * 500,
+                },
+              ],
+            }
+          : undefined,
         subOrders: {
           create: parts.map((qty, n) => ({
             ...subOrder(`${number}-${n + 1}`, `REF-${2000 + i * 10 + n}`, qty, palletType, pick(carrier.trucks).id),
@@ -364,7 +367,7 @@ async function main() {
     if (status !== 'new') {
       const op = { truckId: truck.id, qty: actualQty, palletType, priceCents: actualQty * 500 };
       operations.push({ ...op, type: 'unloading', appliedAt: hoursAfter(date, 1) });
-      if (!active) operations.push({ ...op, type: 'loading', appliedAt: hoursAfter(date, 3) });
+      if (loadingTruck) operations.push({ ...op, truckId: loadingTruck.id, type: 'loading', appliedAt: hoursAfter(date, 3) });
     }
     orders.push({
       ...base,

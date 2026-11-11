@@ -105,7 +105,6 @@ model Order {
   type          OrderType
   subtype       OrderSubtype?
   status        OrderStatus
-  /// Problem text, e.g. "photo missing". Null means no alert
   alert         String?
   nextAction    String?       @map("next_action")
   hubId         String        @map("hub_id") @db.Uuid
@@ -116,7 +115,6 @@ model Order {
   services      String[]
   carrierId     String?       @map("carrier_id") @db.Uuid
   truckId       String?       @map("truck_id") @db.Uuid
-  driver        String?
   palletType    PalletType    @map("pallet_type")
   declaredQty   Int           @map("declared_qty")
   actualQty     Int?          @map("actual_qty")
