@@ -105,8 +105,8 @@ model Order {
   type          OrderType
   subtype       OrderSubtype?
   status        OrderStatus
-  hasAlert      Boolean       @default(false) @map("has_alert")
-  alertReason   String?       @map("alert_reason")
+  /// Problem text, e.g. "photo missing". Null means no alert
+  alert         String?
   nextAction    String?       @map("next_action")
   hubId         String        @map("hub_id") @db.Uuid
   dockId        String?       @map("dock_id") @db.Uuid

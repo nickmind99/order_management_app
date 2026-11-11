@@ -193,14 +193,12 @@ async function main() {
     attachments: [{ kind: 'document', name: 'External PDF', key: 'orders/FR001681/external.pdf' }],
   });
 
-  // FR001674: consolidation with an alert, 20 declared / 18 actual
+  // FR001674: consolidation, 20 declared / 18 actual. The alert is on sub-order -2, not on the parent
   const fr1674Date = at(4, '11:00');
   orders.push({
     number: 'FR001674',
     type: 'consolidation',
     status: 'in_progress',
-    hasAlert: true,
-    alertReason: 'photo missing',
     nextAction: 'Upload photo',
     hubId: markham.id,
     date: fr1674Date,
@@ -215,7 +213,7 @@ async function main() {
     subOrders: {
       create: [
         { ...subOrder('FR001674-1', 'REF-1005', 12, 'std', tforceTruck1.id), actualQty: 11 },
-        { ...subOrder('FR001674-2', 'REF-1006', 8, 'std', tforceTruck1.id), actualQty: 7, hasAlert: true, alertReason: 'photo missing' },
+        { ...subOrder('FR001674-2', 'REF-1006', 8, 'std', tforceTruck1.id), actualQty: 7, alert: 'photo missing' },
       ].map((s) => ({ ...s, status: 'in_progress', hubId: markham.id, date: fr1674Date, customer: 'Northline Foods', createdBy: 'User 3 · Dispatcher', carrierId: tforce.id })),
     },
   });
@@ -376,8 +374,7 @@ async function main() {
       truckId: truck.id,
       declaredQty,
       actualQty: status === 'new' ? null : actualQty,
-      hasAlert,
-      alertReason: hasAlert ? 'BOL missing' : null,
+      alert: hasAlert ? 'BOL missing' : null,
       nextAction: hasAlert ? 'Upload BOL' : status === 'new' ? 'Waiting for truck' : status === 'in_progress' ? 'Loading' : null,
       operations: { create: operations },
       supplies: active ? undefined : { create: [{ sku: 'Straps 12', category: 'securement', qty: int(2, 6), unitPriceCents: 350 }] },
