@@ -5,3 +5,4 @@ dist/
 .idea/
 *.tsbuildinfo
 packages/db/src/generated/
+task/
