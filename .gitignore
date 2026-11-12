@@ -6,3 +6,7 @@ dist/
 *.tsbuildinfo
 packages/db/src/generated/
 task/
+packages/generator/lambda/
+.terraform/
+*.tfstate
+*.tfstate.*
