@@ -185,6 +185,10 @@ export class OrdersService {
     };
   }
 
+  async clearStatsCache(): Promise<void> {
+    await this.redis.del(STATS_CACHE_KEY).catch(() => undefined);
+  }
+
   async cachedStats(): Promise<OrderStatsDto> {
     const cached = await this.redis.get(STATS_CACHE_KEY).catch(() => null);
     if (cached) return JSON.parse(cached) as OrderStatsDto;
@@ -246,5 +250,4 @@ export class OrdersService {
       orders,
     };
   }
-
 }
