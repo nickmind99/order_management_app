@@ -70,8 +70,10 @@ export interface Activity {
   orders: { number: string; completedAt: string; totalCents: number }[];
 }
 
+const API_URL = import.meta.env.VITE_API_URL ?? '/api';
+
 async function request<T>(path: string, method = 'GET'): Promise<T> {
-  const response = await fetch(`/api${path}`, { method }).catch(() => {
+  const response = await fetch(`${API_URL}${path}`, { method }).catch(() => {
     throw new Error('Server is not available, try again later');
   });
   if (!response.ok) {
