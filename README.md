@@ -7,7 +7,8 @@ Client cabinet for a logistics company: dashboard, order list and order detail. 
 - **Frontend:** React, Vite, plain CSS
 - **Backend:** NestJS, Prisma 7, PostgreSQL 16, Redis
 - **Generator:** AWS Lambda, LangChain, OpenAI
-- **Infra:** Terraform, AWS (RDS, SSM Parameter Store)
+- **Infra:** Terraform, Docker, AWS (EC2, ECR, S3, RDS, Lambda, EventBridge, SSM Parameter Store, CloudWatch)
+- **CI/CD:** GitHub Actions
 - **Tooling:** pnpm monorepo, TypeScript, Node.js 22
 
 ## Structure
