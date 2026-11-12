@@ -52,6 +52,16 @@ infra               Terraform for AWS
 
 Stop the containers with `pnpm db:down`.
 
+## Tests
+
+Unit tests use Vitest. Prisma, Redis and Lambda are mocked, so no database or AWS is needed.
+
+```
+pnpm test
+```
+
+Test files sit next to the code as `*.test.ts` and are excluded from the API build.
+
 ## Environment variables
 
 All variables live in the root `.env`. The API and Prisma load it automatically.
