@@ -10,3 +10,4 @@ packages/generator/lambda/
 .terraform/
 *.tfstate
 *.tfstate.*
+infra/build/
