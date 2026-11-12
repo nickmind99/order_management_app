@@ -25,6 +25,29 @@ export function orderSchema(context: GeneratorContext) {
     },
   };
 
+  const operation = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['type', 'qty', 'priceCents'],
+    properties: {
+      type: { type: 'string', enum: ['unloading', 'disposal', 'restack', 'loading'] },
+      qty: { type: 'integer' },
+      priceCents: { type: ['integer', 'null'] },
+    },
+  };
+
+  const supply = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['sku', 'category', 'qty', 'unitPriceCents'],
+    properties: {
+      sku: { type: 'string' },
+      category: { type: 'string', enum: ['securement', 'edge_protect', 'wrap'] },
+      qty: { type: 'integer' },
+      unitPriceCents: { type: 'integer' },
+    },
+  };
+
   const properties = {
     type: { type: 'string', enum: ['cross_dock', 'consolidation'] },
     subtype: { type: ['string', 'null'], enum: ['storage', 'pickup', null] },
@@ -41,7 +64,10 @@ export function orderSchema(context: GeneratorContext) {
     palletType,
     declaredQty: { type: 'integer' },
     createdBy: { type: 'string' },
+    nextAction: nullableString,
     subOrders: { type: 'array', items: subOrder },
+    operations: { type: 'array', items: operation },
+    supplies: { type: 'array', items: supply },
   };
 
   return { type: 'object', additionalProperties: false, required: Object.keys(properties), properties };

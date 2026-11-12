@@ -14,6 +14,8 @@ function normalize(order: GeneratedOrder, context: GeneratorContext): GeneratedO
 
   return {
     ...order,
+    operations: order.operations.map((op) => ({ ...op, qty: Math.max(1, op.qty) })),
+    supplies: order.supplies.map((supply) => ({ ...supply, qty: Math.max(1, supply.qty) })),
     type: isConsolidation ? 'consolidation' : 'cross_dock',
     subtype: isConsolidation ? null : (order.subtype ?? 'storage'),
     refNumber: order.status === 'draft' ? null : order.refNumber,
@@ -27,8 +29,9 @@ function normalize(order: GeneratedOrder, context: GeneratorContext): GeneratedO
 }
 
 export async function saveOrder(prisma: PrismaClient, generated: GeneratedOrder, context: GeneratorContext): Promise<string> {
-  const { subOrders, ...data } = normalize(generated, context);
+  const { subOrders, operations, supplies, ...data } = normalize(generated, context);
   const date = new Date(data.date);
+  const now = new Date(context.today).getTime();
 
   return prisma.$transaction(async (tx) => {
     const parent = await tx.order.create({
@@ -48,6 +51,16 @@ export async function saveOrder(prisma: PrismaClient, generated: GeneratedOrder,
         createdBy: parent.createdBy,
       })),
     });
+    await tx.operation.createMany({
+      data: operations.map((op, i) => ({
+        ...op,
+        orderId: parent.id,
+        palletType: parent.palletType,
+        truckId: op.type === 'unloading' || op.type === 'loading' ? parent.truckId : null,
+        appliedAt: new Date(now - (operations.length - i) * 20 * 60_000),
+      })),
+    });
+    await tx.supply.createMany({ data: supplies.map((supply) => ({ ...supply, orderId: parent.id })) });
     return parent.number;
   });
 }

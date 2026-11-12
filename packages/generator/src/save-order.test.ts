@@ -31,7 +31,10 @@ function generated(overrides: Partial<GeneratedOrder>): GeneratedOrder {
     palletType: 'std',
     declaredQty: 6,
     createdBy: 'User 3 · Dispatcher',
+    nextAction: 'Waiting for truck',
     subOrders: [],
+    operations: [],
+    supplies: [],
     ...overrides,
   };
 }
@@ -42,10 +45,18 @@ async function save(order: GeneratedOrder) {
       create: vi.fn(async ({ data }) => ({ ...data, id: 'parent-id', number: 'FR001800' })),
       createMany: vi.fn(),
     },
+    operation: { createMany: vi.fn() },
+    supply: { createMany: vi.fn() },
   };
   const prisma = { $transaction: (run: (client: typeof tx) => Promise<string>) => run(tx) };
   const number = await saveOrder(prisma as never, order, context);
-  return { number, parent: tx.order.create.mock.calls[0][0].data, subOrders: tx.order.createMany.mock.calls[0][0].data };
+  return {
+    number,
+    parent: tx.order.create.mock.calls[0][0].data,
+    subOrders: tx.order.createMany.mock.calls[0][0].data,
+    operations: tx.operation.createMany.mock.calls[0][0].data,
+    supplies: tx.supply.createMany.mock.calls[0][0].data,
+  };
 }
 
 describe('saveOrder', () => {
@@ -92,6 +103,26 @@ describe('saveOrder', () => {
 
     expect(parent.type).toBe('cross_dock');
     expect(parent.subtype).toBe('storage');
+  });
+
+  it('saves operations and supplies of the order', async () => {
+    const { parent, operations, supplies } = await save(
+      generated({
+        operations: [
+          { type: 'unloading', qty: 6, priceCents: 5000 },
+          { type: 'restack', qty: 0, priceCents: null },
+          { type: 'loading', qty: 6, priceCents: 4500 },
+        ],
+        supplies: [{ sku: 'Straps 12', category: 'securement', qty: 4, unitPriceCents: 350 }],
+      }),
+    );
+
+    expect(parent.nextAction).toBe('Waiting for truck');
+    expect(operations).toHaveLength(3);
+    expect(operations[0]).toMatchObject({ type: 'unloading', orderId: 'parent-id', truckId: 'truck-1', palletType: 'std' });
+    expect(operations[1]).toMatchObject({ type: 'restack', qty: 1, truckId: null });
+    expect(operations[0].appliedAt.getTime()).toBeLessThan(operations[2].appliedAt.getTime());
+    expect(supplies).toEqual([{ sku: 'Straps 12', category: 'securement', qty: 4, unitPriceCents: 350, orderId: 'parent-id' }]);
   });
 
   it('saves consolidation sub-orders linked to the parent', async () => {

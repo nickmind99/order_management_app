@@ -11,6 +11,19 @@ export interface GeneratedSubOrder {
   truckId: string | null;
 }
 
+export interface GeneratedOperation {
+  type: 'unloading' | 'disposal' | 'restack' | 'loading';
+  qty: number;
+  priceCents: number | null;
+}
+
+export interface GeneratedSupply {
+  sku: string;
+  category: 'securement' | 'edge_protect' | 'wrap';
+  qty: number;
+  unitPriceCents: number;
+}
+
 export interface GeneratedOrder {
   type: 'cross_dock' | 'consolidation';
   subtype: 'storage' | 'pickup' | null;
@@ -27,7 +40,10 @@ export interface GeneratedOrder {
   palletType: 'std' | 'xl';
   declaredQty: number;
   createdBy: string;
+  nextAction: string | null;
   subOrders: GeneratedSubOrder[];
+  operations: GeneratedOperation[];
+  supplies: GeneratedSupply[];
 }
 
 export interface GeneratorOptions {
