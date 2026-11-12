@@ -12,6 +12,8 @@ export class ActivityDto {
   period!: ActivityPeriod;
   from!: Date;
   to!: Date;
+  @ApiProperty({ description: 'Start of the orders list: start of the year for quarter, otherwise equal to from' })
+  chartFrom!: Date;
   completed!: number;
   spendCents!: number;
   avgPerOrderCents!: number;

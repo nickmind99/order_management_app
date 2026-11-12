@@ -4,6 +4,7 @@ Client cabinet for a logistics company: dashboard, order list and order detail. 
 
 ## Stack
 
+- **Frontend:** React, Vite, plain CSS
 - **Backend:** NestJS, Prisma 7, PostgreSQL 16, Redis
 - **Generator:** AWS Lambda, LangChain, OpenAI
 - **Infra:** Terraform, AWS (RDS, SSM Parameter Store)
@@ -12,6 +13,7 @@ Client cabinet for a logistics company: dashboard, order list and order detail. 
 ## Structure
 
 ```
+apps/web            React frontend
 apps/api            NestJS API, Swagger at /api/docs
 packages/db         Prisma schema, migrations, seed
 packages/generator  Lambda that generates and saves an order
@@ -44,11 +46,13 @@ infra               Terraform for AWS
    pnpm db:migrate
    pnpm db:seed
    ```
-5. Start the API:
+5. Start the API and the frontend:
    ```
    pnpm dev
    ```
-   API: http://localhost:3000/api, Swagger: http://localhost:3000/api/docs
+   Frontend: http://localhost:5173, API: http://localhost:3000/api, Swagger: http://localhost:3000/api/docs
+
+   Vite proxies `/api` requests to the API, so the frontend and the API work as one site.
 
 Stop the containers with `pnpm db:down`.
 

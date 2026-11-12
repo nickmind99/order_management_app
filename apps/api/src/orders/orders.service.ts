@@ -219,10 +219,11 @@ export class OrdersService {
     const to = new Date();
     const from = startOfPeriod(period, to);
     const previousFrom = shiftPeriod(period, from, -1);
+    const chartFrom = period === 'quarter' ? new Date(Date.UTC(to.getUTCFullYear(), 0, 1)) : from;
 
     const [rows, previousCompleted] = await Promise.all([
       this.prisma.order.findMany({
-        where: { ...TOP, completedAt: { gte: from, lt: to } },
+        where: { ...TOP, completedAt: { gte: chartFrom, lt: to } },
         select: {
           number: true,
           completedAt: true,
@@ -235,13 +236,15 @@ export class OrdersService {
     ]);
 
     const orders = rows.map((row) => ({ number: row.number, completedAt: row.completedAt!, totalCents: orderTotalCents(row) }));
-    const completed = orders.length;
-    const spendCents = orders.reduce((sum, o) => sum + o.totalCents, 0);
+    const current = orders.filter((o) => o.completedAt >= from);
+    const completed = current.length;
+    const spendCents = current.reduce((sum, o) => sum + o.totalCents, 0);
 
     return {
       period,
       from,
       to,
+      chartFrom,
       completed,
       spendCents,
       avgPerOrderCents: completed ? Math.round(spendCents / completed) : 0,
