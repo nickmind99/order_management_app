@@ -30,7 +30,7 @@ describe('OrdersService', () => {
 
       expect(result.total).toBe(4);
       expect(result.tabs).toEqual({ all: 10, crossDock: 4, consolidation: 3, alerts: 2, drafts: 1 });
-      expect(prisma.order.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 40, take: 20 }));
+      expect(prisma.order.findMany).toHaveBeenCalledWith(expect.objectContaining({ orderBy: { number: 'desc' }, skip: 40, take: 20 }));
     });
 
     it('filters top-level orders by tab and searches several fields', async () => {

@@ -80,7 +80,7 @@ export class OrdersService {
       this.prisma.order.findMany({
         where: { AND: [filters, TAB_FILTERS[query.tab]] },
         include: orderCardInclude,
-        orderBy: { date: 'desc' },
+        orderBy: { number: 'desc' },
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
       }),
