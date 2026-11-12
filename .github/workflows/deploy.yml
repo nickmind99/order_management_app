@@ -1,0 +1,131 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-north-1
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
+  deploy:
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download code
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Log in to AWS
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create the Terraform state bucket
+        run: |
+          STATE_BUCKET="order-management-tfstate-$(aws sts get-caller-identity --query Account --output text)"
+          echo "STATE_BUCKET=$STATE_BUCKET" >> "$GITHUB_ENV"
+          if ! aws s3api head-bucket --bucket "$STATE_BUCKET" 2>/dev/null; then
+            aws s3api create-bucket --bucket "$STATE_BUCKET" --create-bucket-configuration LocationConstraint="$AWS_REGION"
+            aws s3api put-bucket-versioning --bucket "$STATE_BUCKET" --versioning-configuration Status=Enabled
+          fi
+
+      - name: Build the generator lambda
+        run: |
+          pnpm --filter @freitty/db build
+          pnpm --filter @freitty/generator build
+
+      - name: Create or update the infrastructure
+        working-directory: infra
+        env:
+          TF_VAR_openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          terraform init -input=false -backend-config="bucket=$STATE_BUCKET"
+          terraform apply -input=false -auto-approve
+
+      - name: Read Terraform outputs
+        working-directory: infra
+        run: |
+          DATABASE_URL=$(terraform output -raw database_url)
+          echo "::add-mask::$DATABASE_URL"
+          echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+          echo "API_IMAGE=$(terraform output -raw api_repository_url):latest" >> "$GITHUB_ENV"
+          echo "INSTANCE_ID=$(terraform output -raw instance_id)" >> "$GITHUB_ENV"
+          echo "API_URL=$(terraform output -raw api_url)" >> "$GITHUB_ENV"
+          echo "WEB_BUCKET=$(terraform output -raw web_bucket)" >> "$GITHUB_ENV"
+          echo "WEB_URL=$(terraform output -raw web_url)" >> "$GITHUB_ENV"
+
+      - name: Migrate the database
+        run: pnpm --filter @freitty/db migrate:deploy
+
+      - name: Seed the database if it is empty
+        run: |
+          HUBS=$(psql "${DATABASE_URL/no-verify/require}" -tAc 'SELECT count(*) FROM hubs')
+          if [ "$HUBS" = "0" ]; then pnpm db:seed; fi
+
+      - name: Build and push the API image
+        run: |
+          aws ecr get-login-password | docker login --username AWS --password-stdin "${API_IMAGE%%/*}"
+          docker build -f apps/api/Dockerfile -t "$API_IMAGE" .
+          docker push "$API_IMAGE"
+
+      - name: Restart the API on the server
+        run: |
+          until [ "$(aws ssm describe-instance-information --filters "Key=InstanceIds,Values=$INSTANCE_ID" --query 'InstanceInformationList[0].PingStatus' --output text)" = "Online" ]; do
+            echo "Waiting for the server to connect to SSM"
+            sleep 10
+          done
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters 'commands=["cloud-init status --wait", "/opt/app/deploy.sh"]' \
+            --query Command.CommandId \
+            --output text)
+
+          while true; do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            echo "Deploy on the server: $STATUS"
+            case "$STATUS" in
+              Success) break ;;
+              Pending|InProgress|Delayed) sleep 10 ;;
+              *) aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query StandardErrorContent --output text; exit 1 ;;
+            esac
+          done
+
+      - name: Build the frontend
+        run: VITE_API_URL="$API_URL" pnpm --filter @freitty/web build
+
+      - name: Upload the frontend to S3
+        run: aws s3 sync apps/web/dist "s3://$WEB_BUCKET" --delete
+
+      - name: Show the app URL
+        run: |
+          echo "App: $WEB_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "API: $API_URL" >> "$GITHUB_STEP_SUMMARY"
