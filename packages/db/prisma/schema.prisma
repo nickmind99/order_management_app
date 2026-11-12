@@ -99,7 +99,7 @@ model Truck {
 
 model Order {
   id            String        @id @default(uuid()) @db.Uuid
-  number        String        @unique
+  number        String        @unique @default(dbgenerated("('FR'::text || lpad((nextval('order_number_seq'::regclass))::text, 6, '0'::text))"))
   parentId      String?       @map("parent_id") @db.Uuid
   refNumber     String?       @map("ref_number")
   type          OrderType

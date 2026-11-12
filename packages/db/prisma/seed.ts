@@ -32,6 +32,7 @@ const pick = <T>(items: T[]): T => items[int(0, items.length - 1)];
 
 async function main() {
   await prisma.$executeRaw`TRUNCATE hubs, docks, carriers, trucks, orders, operations, supplies CASCADE`;
+  await prisma.$executeRaw`ALTER SEQUENCE order_number_seq RESTART`;
 
   const markham = await prisma.hub.create({
     data: {
