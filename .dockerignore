@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+.git
+.env
+.idea
+task
+infra
+packages/db/src/generated
+packages/generator/lambda

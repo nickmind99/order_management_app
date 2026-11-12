@@ -11,6 +11,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
   app.enableShutdownHooks();
+  if (process.env.CORS_ORIGIN) app.enableCors({ origin: process.env.CORS_ORIGIN });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
 
   const config = new DocumentBuilder().setTitle('Freitty API').setVersion('1.0').build();
