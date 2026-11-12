@@ -14,11 +14,15 @@
     "db:migrate": "pnpm --filter @freitty/db migrate:dev",
     "db:reset": "pnpm --filter @freitty/db migrate:reset",
     "db:seed": "pnpm --filter @freitty/db seed",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "eslint ."
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@types/node": "^22.20.5",
+    "eslint": "10.14.0",
     "typescript": "~6.0.3",
+    "typescript-eslint": "8.72.2",
     "vitest": "5.1.0"
   }
 }
