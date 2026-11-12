@@ -62,6 +62,25 @@ pnpm test
 
 Test files sit next to the code as `*.test.ts` and are excluded from the API build.
 
+## Lint and typecheck
+
+```
+pnpm lint
+pnpm typecheck
+```
+
+ESLint config is `eslint.config.mjs` (recommended JS and TypeScript rules).
+
+## Checks (CI)
+
+GitHub Actions workflow `.github/workflows/checks.yml` runs on every pull request to `main` and on every push to `main`:
+
+1. install dependencies (`pnpm install --frozen-lockfile`)
+2. build `@freitty/db` (generates the Prisma client that the API and the lambda import)
+3. `pnpm lint`
+4. `pnpm typecheck`
+5. `pnpm test`
+
 ## Environment variables
 
 All variables live in the root `.env`. The API and Prisma load it automatically.
