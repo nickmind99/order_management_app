@@ -108,7 +108,9 @@ Build the lambda bundle:
 ```
 pnpm --filter @freitty/generator build
 ```
-The result is `packages/generator/lambda/index.js` with handler `index.handler`.
+The result is `packages/generator/lambda/index.js` with handler `index.handler`. Terraform zips this file, so build it before `terraform plan` or `terraform apply`.
+
+In AWS the lambda reads the database URL and the OpenAI key from SSM Parameter Store. Its environment only holds the parameter names: `DATABASE_URL_PARAMETER`, `OPENAI_API_KEY_PARAMETER`, plus `OPENAI_MODEL`.
 
 ## AWS infrastructure
 
@@ -118,6 +120,10 @@ Terraform lives in `infra/`. It creates:
 - a security group that opens port 5432
 - a generated database password
 - the connection string in SSM Parameter Store: `/order-management/database-url`
+- the OpenAI key in SSM Parameter Store: `/order-management/openai-api-key`
+- the generator lambda `order-management-generator` (Node.js 22, arm64) with a role that can read only these two parameters and write logs
+- a CloudWatch log group for the lambda, logs are kept 14 days
+- an EventBridge rule that runs the lambda every hour
 
 Region is `eu-north-1` (Stockholm), set in `infra/variables.tf`.
 
@@ -134,11 +140,13 @@ Region is `eu-north-1` (Stockholm), set in `infra/variables.tf`.
 
 ### Create the infrastructure
 
-Terraform does not read `.env` by itself, so load it into the terminal first. Repeat this in every new terminal window.
+Terraform does not read `.env` by itself, so load it into the terminal first. Terraform reads its variables from `TF_VAR_*` environment variables, so pass the OpenAI key as `TF_VAR_openai_api_key`. Repeat this in every new terminal window.
 
 ```
+pnpm --filter @freitty/generator build
 cd infra
 set -a; source ../.env; set +a
+export TF_VAR_openai_api_key=$OPENAI_API_KEY
 terraform init
 terraform plan
 terraform apply
@@ -148,7 +156,15 @@ terraform apply
 - `plan` shows what will be created and changes nothing.
 - `apply` creates the resources after you type `yes`. RDS takes 5–10 minutes.
 
-Check the result in the AWS console (region **Stockholm**): **RDS → Databases** and **Systems Manager → Parameter Store**.
+Check the result in the AWS console (region **Stockholm**): **RDS → Databases**, **Systems Manager → Parameter Store**, **Lambda → Functions** and **EventBridge → Rules**.
+
+The lambda starts running every hour right after `apply`. It fails until the database is migrated and seeded (next step).
+
+### Run the generator
+
+- From the AWS console: **Lambda → order-management-generator → Test → Test**. The response is `{ "number": "FR00..." }`.
+- From the app: set `GENERATOR_LAMBDA_NAME=order-management-generator` and `AWS_REGION=eu-north-1` in `.env`, start the API and press **Generate order** on the dashboard.
+- Logs: **CloudWatch → Log groups → /aws/lambda/order-management-generator**.
 
 ### Migrate and seed RDS
 
