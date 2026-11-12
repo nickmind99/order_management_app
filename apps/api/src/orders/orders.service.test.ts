@@ -194,6 +194,23 @@ describe('OrdersService', () => {
       expect(result.orders[1]).toEqual({ number: 'FR002', completedAt, totalCents: 1001 });
     });
 
+    it('lists quarter orders from the start of the year but counts only the current quarter', async () => {
+      const { prisma, service } = setup();
+      prisma.order.findMany.mockResolvedValue([
+        { number: 'FR001', completedAt: new Date('2026-02-10T12:00:00Z'), operations: [{ priceCents: 500 }], supplies: [] },
+        { number: 'FR002', completedAt: new Date('2026-11-10T12:00:00Z'), operations: [{ priceCents: 700 }], supplies: [] },
+      ]);
+      prisma.order.count.mockResolvedValue(0);
+
+      const result = await service.activity('quarter');
+
+      expect(prisma.order.findMany.mock.calls[0][0].where.completedAt.gte).toEqual(new Date('2026-01-01T00:00:00Z'));
+      expect(result.chartFrom).toEqual(new Date('2026-01-01T00:00:00Z'));
+      expect(result.orders).toHaveLength(2);
+      expect(result.completed).toBe(1);
+      expect(result.spendCents).toBe(700);
+    });
+
     it('returns zero average and no change when there is nothing to compare', async () => {
       const { prisma, service } = setup();
       prisma.order.findMany.mockResolvedValue([]);
