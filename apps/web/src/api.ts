@@ -47,6 +47,75 @@ export interface OrderList {
   total: number;
   page: number;
   pageSize: number;
+  tabs: { all: number; crossDock: number; consolidation: number; alerts: number; drafts: number };
+}
+
+export interface Hub {
+  id: string;
+  name: string;
+  region: string;
+  address: string;
+}
+
+export interface OrderDetail {
+  number: string;
+  refNumber: string | null;
+  type: OrderType;
+  subtype: OrderSubtype | null;
+  status: OrderStatus;
+  alert: string | null;
+  warning: string | null;
+  hasAlert: boolean;
+  hasWarning: boolean;
+  nextAction: string | null;
+  hub: Hub;
+  dock: { number: number; bay: string } | null;
+  date: string;
+  destination: string | null;
+  customer: string;
+  services: string[];
+  carrier: { name: string; phone: string } | null;
+  truck: { number: string; trailerNumber: string; trailerType: string } | null;
+  palletType: PalletType;
+  declaredQty: number;
+  actualQty: number | null;
+  delta: number | null;
+  warehouseNote: string | null;
+  invoiceNumber: string | null;
+  createdBy: string;
+  assignedTo: string | null;
+  completedAt: string | null;
+  subOrders: {
+    number: string;
+    refNumber: string | null;
+    status: OrderStatus;
+    palletType: PalletType;
+    declaredQty: number;
+    actualQty: number | null;
+    alert: string | null;
+    warning: string | null;
+    trailerNumber: string | null;
+  }[];
+  operations: {
+    id: string;
+    type: 'unloading' | 'disposal' | 'restack' | 'loading';
+    trailerNumber: string | null;
+    qty: number;
+    palletType: PalletType;
+    appliedAt: string;
+    priceCents: number | null;
+  }[];
+  supplies: {
+    id: string;
+    sku: string;
+    category: 'securement' | 'edge_protect' | 'wrap';
+    qty: number;
+    unitPriceCents: number;
+    lineTotalCents: number;
+  }[];
+  operationsTotalCents: number;
+  suppliesSubtotalCents: number;
+  totalCents: number;
 }
 
 export interface OrderStats {
@@ -70,7 +139,7 @@ export interface Activity {
   orders: { number: string; completedAt: string; totalCents: number }[];
 }
 
-const API_URL = import.meta.env.VITE_API_URL ?? '/api';
+export const API_URL = import.meta.env.VITE_API_URL ?? '/api';
 
 async function request<T>(path: string, method = 'GET'): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { method }).catch(() => {

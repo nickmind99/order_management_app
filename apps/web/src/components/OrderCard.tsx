@@ -1,4 +1,6 @@
+import type { MouseEvent } from 'react';
 import type { OrderCard as Order } from '../api';
+import { navigate } from '../router';
 import { formatDate, formatMoney, formatPallets, STATUS_LABELS, SUBTYPE_LABELS, TYPE_LABELS } from '../format';
 
 function RefNumbers({ order }: { order: Order }) {
@@ -71,19 +73,25 @@ function Footer({ order }: { order: Order }) {
   return <div className="card-footer">Next: {order.nextAction ?? '—'}</div>;
 }
 
-export function OrderCard({ order }: { order: Order }) {
+export function OrderCard({ order, isNew = false }: { order: Order; isNew?: boolean }) {
   const isConsolidation = order.type === 'consolidation';
   const typeLine = isConsolidation
     ? `${TYPE_LABELS[order.type]} · ${order.subOrders.length} sub-orders`
     : `${TYPE_LABELS[order.type]}${order.subtype ? ` · ${SUBTYPE_LABELS[order.subtype]}` : ''}`;
 
+  function handleClick(event: MouseEvent) {
+    if ((event.target as HTMLElement).closest('details')) return;
+    navigate(`/orders/${order.number}`);
+  }
+
   return (
-    <div className={order.hasAlert ? 'order-card has-alert' : 'order-card'}>
+    <div className={`order-card${order.hasAlert ? ' has-alert' : ''}${isNew ? ' is-new' : ''}`} onClick={handleClick}>
       <div className="card-head">
         <div>
           <div className="card-id">
             <span className="order-number">{order.number}</span>
             <RefNumbers order={order} />
+            {isNew && <span className="new-label">✨ Just generated</span>}
           </div>
           <div className="muted">{typeLine}</div>
           <CreatedBy value={order.createdBy} />

@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from 'react';
+import { navigate } from '../router';
 
-export function Topbar({ onSearch }: { onSearch: (search: string) => void }) {
+export function Topbar() {
   const [text, setText] = useState('');
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    onSearch(text.trim());
+    const search = text.trim();
+    navigate(search ? `/orders?${new URLSearchParams({ search })}` : '/orders');
   }
 
   return (
