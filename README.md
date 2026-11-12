@@ -75,15 +75,17 @@ pnpm typecheck
 
 ESLint config is `eslint.config.mjs` (recommended JS and TypeScript rules).
 
-## Checks (CI)
+## CI/CD
 
-GitHub Actions workflow `.github/workflows/checks.yml` runs on every pull request to `main` and on every push to `main`:
+`.github/workflows/checks.yml` runs on every pull request to `main`:
 
 1. install dependencies (`pnpm install --frozen-lockfile`)
 2. build `@freitty/db` (generates the Prisma client that the API and the lambda import)
 3. `pnpm lint`
 4. `pnpm typecheck`
 5. `pnpm test`
+
+`.github/workflows/deploy.yml` runs on every push to `main` (and by hand: **Actions → Deploy → Run workflow**). It runs the same checks first and deploys only if they pass, see [What the deploy does](#what-the-deploy-does).
 
 ## Environment variables
 
@@ -98,6 +100,8 @@ All variables live in the root `.env`. The API and Prisma load it automatically.
 | `OPENAI_MODEL` | lambda | OpenAI model, `gpt-5.4-mini` by default |
 | `GENERATOR_LAMBDA_NAME` | API | Lambda that `POST /api/orders/generate` invokes |
 | `AWS_REGION` | API | Region of the lambda |
+| `CORS_ORIGIN` | API | Frontend origin (S3 website) allowed to call the API, set only in production |
+| `VITE_API_URL` | web build | API address for the frontend, `/api` by default |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Terraform, API (local only) | AWS access keys. In AWS the IAM role is used instead |
 
 Never commit `.env`: it holds passwords and keys.
@@ -114,7 +118,7 @@ In AWS the lambda reads the database URL and the OpenAI key from SSM Parameter S
 
 ## AWS infrastructure
 
-Terraform lives in `infra/`. It creates:
+Everything in AWS is created and deployed by GitHub Actions (`.github/workflows/deploy.yml`) on every push to `main`. Terraform lives in `infra/`. It creates:
 
 - RDS Postgres 16 (`order-management-db`, `db.t4g.micro`)
 - a security group that opens port 5432
@@ -124,63 +128,85 @@ Terraform lives in `infra/`. It creates:
 - the generator lambda `order-management-generator` (Node.js 22, arm64) with a role that can read only these two parameters and write logs
 - a CloudWatch log group for the lambda, logs are kept 14 days
 - an EventBridge rule that runs the lambda every hour
+- an S3 bucket with static website hosting for the frontend
+- an ECR repository for the API image: `order-management-api`
+- EC2 `t3.micro` (Amazon Linux 2023) with Docker, an Elastic IP and a security group that opens port 3000 (API)
+- an IAM role for EC2: pull images from ECR, read the database URL from SSM, invoke the generator lambda, connect through SSM Session Manager
 
-Region is `eu-north-1` (Stockholm), set in `infra/variables.tf`.
+Region is `eu-north-1` (Stockholm). The Terraform state is stored in the S3 bucket `order-management-tfstate-<account id>` with versioning, the pipeline creates it on the first run.
 
-### AWS access keys
+### One-time setup
 
 1. AWS console → **IAM → Users → Create user**, name `terraform`, no console access.
 2. **Attach policies directly → AdministratorAccess → Create user**.
 3. Open the user → **Security credentials → Create access key → Command Line Interface (CLI)**.
-4. Add both values to `.env`:
-   ```
-   AWS_ACCESS_KEY_ID=...
-   AWS_SECRET_ACCESS_KEY=...
-   ```
+4. GitHub → **Settings → Secrets and variables → Actions → Secrets → New repository secret**, add three secrets:
 
-### Create the infrastructure
+| Secret | Value |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | access key of the `terraform` user |
+| `AWS_SECRET_ACCESS_KEY` | secret key of the `terraform` user |
+| `OPENAI_API_KEY` | OpenAI API key |
 
-Terraform does not read `.env` by itself, so load it into the terminal first. Terraform reads its variables from `TF_VAR_*` environment variables, so pass the OpenAI key as `TF_VAR_openai_api_key`. Repeat this in every new terminal window.
+5. Push to `main` or run **Actions → Deploy → Run workflow**. The first run takes about 15 minutes, RDS is the slowest part.
+
+### What the deploy does
+
+1. runs lint, typecheck and tests (`checks.yml`)
+2. creates the Terraform state bucket if it does not exist
+3. builds the generator lambda and runs `terraform apply`
+4. reads the addresses it needs from `terraform output`
+5. applies database migrations, seeds the database only if it is empty (the seed deletes all data)
+6. builds the API image, pushes it to ECR and runs `/opt/app/deploy.sh` on the server through SSM
+7. builds the frontend with `VITE_API_URL` and uploads it to the S3 bucket
+
+The app URL is printed by `terraform output web_url`, or find the bucket in **S3 → order-management-web-… → Properties → Static website hosting**.
+
+### How it runs
 
 ```
-pnpm --filter @freitty/generator build
-cd infra
-set -a; source ../.env; set +a
-export TF_VAR_openai_api_key=$OPENAI_API_KEY
-terraform init
-terraform plan
-terraform apply
+browser → http://<bucket>.s3-website.eu-north-1.amazonaws.com → S3 (frontend files)
+browser → http://<ip>:3000/api                                → EC2: api   (NestJS container)
+                                                                     redis (redis:7.4-alpine, not public)
 ```
 
-- `init` downloads the providers into `infra/.terraform/`.
-- `plan` shows what will be created and changes nothing.
-- `apply` creates the resources after you type `yes`. RDS takes 5–10 minutes.
+The frontend calls the API directly. Its address is baked into the frontend at build time through `VITE_API_URL`, and the API allows requests from the S3 website through `CORS_ORIGIN`. Locally neither is set: the frontend calls `/api` and Vite proxies it to the API.
 
-Check the result in the AWS console (region **Stockholm**): **RDS → Databases**, **Systems Manager → Parameter Store**, **Lambda → Functions** and **EventBridge → Rules**.
+When the server starts for the first time it installs Docker and writes `/opt/app/deploy.sh`. The script logs in to ECR, pulls the API image, reads `DATABASE_URL` from SSM and recreates the `api` container. Redis is started once and keeps running.
 
-The lambda starts running every hour right after `apply`. It fails until the database is migrated and seeded (next step).
+To open a shell on the server: **EC2 → Instances → order-management-server → Connect → Session Manager → Connect**. Containers: `sudo docker ps`, logs: `sudo docker logs api`.
 
 ### Run the generator
 
+- From the app: press **Generate order** on the dashboard.
 - From the AWS console: **Lambda → order-management-generator → Test → Test**. The response is `{ "number": "FR00..." }`.
-- From the app: set `GENERATOR_LAMBDA_NAME=order-management-generator` and `AWS_REGION=eu-north-1` in `.env`, start the API and press **Generate order** on the dashboard.
 - Logs: **CloudWatch → Log groups → /aws/lambda/order-management-generator**.
 
-### Migrate and seed RDS
+### Terraform from your machine
+
+Not needed for deploys, only to look at the state or delete everything. Put the same AWS keys into `.env`, then:
 
 ```
 cd infra
-DATABASE_URL=$(terraform output -raw database_url)
-cd ..
-DATABASE_URL=$DATABASE_URL pnpm --filter @freitty/db migrate:deploy
-DATABASE_URL=$DATABASE_URL pnpm db:seed
+set -a; source ../.env; set +a
+export TF_VAR_openai_api_key=$OPENAI_API_KEY
+terraform init -backend-config="bucket=order-management-tfstate-<account id>"
+terraform output
 ```
 
-### Delete everything
+Delete everything:
 
 ```
-cd infra
+pnpm --filter @freitty/db build && pnpm --filter @freitty/generator build
 terraform destroy
 ```
 
-`infra/terraform.tfstate` stores what Terraform created, including the database password. Keep it and never commit it. Without it Terraform loses track of the resources.
+The state bucket itself is not managed by Terraform, delete it in the S3 console if you no longer need it. The state contains the database password and the OpenAI key, never make the bucket public.
+
+### Build the API image locally
+
+Run from the repository root, the image needs the whole monorepo:
+
+```
+docker build -f apps/api/Dockerfile -t order-management-api .
+```
