@@ -1,0 +1,21 @@
+#!/bin/bash
+set -euo pipefail
+
+aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${registry}
+docker pull ${api_image}
+
+DATABASE_URL=$(aws ssm get-parameter --region ${region} --name ${database_url_parameter} --with-decryption --query Parameter.Value --output text)
+
+docker network inspect app >/dev/null 2>&1 || docker network create app
+docker start redis 2>/dev/null || docker run -d --name redis --network app --restart unless-stopped ${redis_image}
+
+docker rm -f api 2>/dev/null || true
+docker run -d --name api --network app --restart unless-stopped -p 3000:3000 \
+  -e CORS_ORIGIN=${web_url} \
+  -e DATABASE_URL="$DATABASE_URL" \
+  -e REDIS_URL=redis://redis:6379 \
+  -e AWS_REGION=${region} \
+  -e GENERATOR_LAMBDA_NAME=${generator_lambda_name} \
+  ${api_image}
+
+docker image prune -f

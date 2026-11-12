@@ -17,3 +17,13 @@ variable "openai_model" {
   type    = string
   default = "gpt-5.4-mini"
 }
+
+variable "instance_type" {
+  type    = string
+  default = "t3.micro"
+}
+
+variable "redis_image" {
+  type    = string
+  default = "redis:7.4-alpine"
+}

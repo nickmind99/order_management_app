@@ -1,0 +1,13 @@
+#!/bin/bash
+set -euo pipefail
+
+dnf install -y docker
+systemctl enable --now docker
+
+mkdir -p /opt/app
+cat > /opt/app/deploy.sh <<'SCRIPT'
+${deploy_script}
+SCRIPT
+chmod +x /opt/app/deploy.sh
+
+/opt/app/deploy.sh || echo "The API image is not in ECR yet, it will be deployed by GitHub Actions"
