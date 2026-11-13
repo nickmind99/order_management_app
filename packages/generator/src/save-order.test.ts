@@ -84,12 +84,6 @@ describe('saveOrder', () => {
     expect(parent.truckId).toBeNull();
   });
 
-  it('removes the reference number from a draft', async () => {
-    const { parent } = await save(generated({ status: 'draft' }));
-
-    expect(parent.refNumber).toBeNull();
-  });
-
   it('fixes a missing subtype, zero pallets and an invalid date', async () => {
     const { parent } = await save(generated({ subtype: null, declaredQty: 0, date: 'tomorrow' }));
 
@@ -105,9 +99,24 @@ describe('saveOrder', () => {
     expect(parent.subtype).toBe('storage');
   });
 
-  it('saves operations and supplies of the order', async () => {
+  it('drops operations and supplies of a new order', async () => {
     const { parent, operations, supplies } = await save(
       generated({
+        operations: [{ type: 'unloading', qty: 6, priceCents: 5000 }],
+        supplies: [{ sku: 'Straps 12', category: 'securement', qty: 4, unitPriceCents: 350 }],
+      }),
+    );
+
+    expect(parent).toMatchObject({ nextAction: 'Waiting for truck', completedAt: null, actualQty: null });
+    expect(operations).toEqual([]);
+    expect(supplies).toEqual([]);
+  });
+
+  it('saves a completed order with operations and supplies', async () => {
+    const { parent, operations, supplies } = await save(
+      generated({
+        status: 'completed',
+        date: '2026-11-13T09:00:00.000Z',
         operations: [
           { type: 'unloading', qty: 6, priceCents: 5000 },
           { type: 'restack', qty: 0, priceCents: null },
@@ -117,11 +126,15 @@ describe('saveOrder', () => {
       }),
     );
 
-    expect(parent.nextAction).toBe('Waiting for truck');
+    expect(parent).toMatchObject({ status: 'completed', nextAction: null, actualQty: 6 });
+    expect(parent.completedAt).toEqual(new Date(context.today));
+    expect(parent.date).toEqual(new Date(context.today));
+    expect(parent.statusHistory.map((step: { status: string }) => step.status)).toEqual(['new', 'completed']);
     expect(operations).toHaveLength(3);
     expect(operations[0]).toMatchObject({ type: 'unloading', orderId: 'parent-id', truckId: 'truck-1', palletType: 'std' });
     expect(operations[1]).toMatchObject({ type: 'restack', qty: 1, truckId: null });
     expect(operations[0].appliedAt.getTime()).toBeLessThan(operations[2].appliedAt.getTime());
+    expect(operations[2].appliedAt.getTime()).toBeLessThan(parent.completedAt.getTime());
     expect(supplies).toEqual([{ sku: 'Straps 12', category: 'securement', qty: 4, unitPriceCents: 350, orderId: 'parent-id' }]);
   });
 

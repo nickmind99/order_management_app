@@ -12,12 +12,13 @@ Rules:
 - type consolidation: 2 to 4 subOrders, truckId of the order is null, subtype is null, declaredQty equals the sum of subOrders declaredQty, each sub-order truckId is a truck of the chosen carrier or null.
 - carrierId null means self pickup, then truckId and every sub-order truckId are null.
 - dockId belongs to the chosen hub or is null.
-- status is new in most cases, draft sometimes. A draft has refNumber null.
+- status is new or completed, about half of the orders each.
 - declaredQty is between 1 and 26 pallets.
-- nextAction is a short next step, for example "Waiting for truck", "Unloading", "Loading", "Upload photo", "Sign BOL".
-- operations: 2 to 4 in a realistic order (unloading first, loading last), qty close to declaredQty, priceCents between 3000 and 9000 for unloading and loading and null for disposal and restack.
-- supplies: 1 to 3 from "Straps 12" (securement), "Corners 50" (edge_protect), "Shrink wrap 120g" (wrap), unitPriceCents between 100 and 2000.
-- date is an ISO 8601 date-time within 3 days of today.
+- a new order: nextAction is a short next step, for example "Waiting for truck", "Upload photo", "Sign BOL". operations and supplies are empty, nothing was done yet.
+- a completed order: nextAction is null.
+- a completed order: operations are 2 to 4 in a realistic order (unloading first, loading last), qty close to declaredQty, priceCents between 3000 and 9000 for unloading and loading and null for disposal and restack.
+- a completed order: supplies are 1 to 3 from "Straps 12" (securement), "Corners 50" (edge_protect), "Shrink wrap 120g" (wrap), unitPriceCents between 100 and 2000.
+- date is an ISO 8601 date-time: for a new order within 3 days after today, for a completed order earlier today.
 - refNumber looks like REF-1234 or a client PO number.
 - customer is a plausible company name, destination is "City, XX" with a province or state code.
 - services are taken from: Transload, Restock & Rework, Storage, Labeling.

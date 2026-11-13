@@ -27,7 +27,7 @@ export interface GeneratedSupply {
 export interface GeneratedOrder {
   type: 'cross_dock' | 'consolidation';
   subtype: 'storage' | 'pickup' | null;
-  status: 'draft' | 'new';
+  status: 'new' | 'completed';
   refNumber: string | null;
   hubId: string;
   dockId: string | null;

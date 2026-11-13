@@ -51,7 +51,7 @@ export function orderSchema(context: GeneratorContext) {
   const properties = {
     type: { type: 'string', enum: ['cross_dock', 'consolidation'] },
     subtype: { type: ['string', 'null'], enum: ['storage', 'pickup', null] },
-    status: { type: 'string', enum: ['draft', 'new'] },
+    status: { type: 'string', enum: ['new', 'completed'] },
     refNumber: nullableString,
     hubId: oneOfIds(hubIds),
     dockId: oneOfIds(dockIds, true),
