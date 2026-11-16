@@ -67,13 +67,13 @@ resource "aws_lambda_function" "generator" {
   depends_on = [aws_iam_role_policy_attachment.generator_logs, aws_cloudwatch_log_group.generator]
 }
 
-resource "aws_cloudwatch_event_rule" "generator_hourly" {
-  name                = "${var.project}-generator-hourly"
-  schedule_expression = "rate(1 hour)"
+resource "aws_cloudwatch_event_rule" "generator_daily" {
+  name                = "${var.project}-generator-daily"
+  schedule_expression = "rate(1 day)"
 }
 
 resource "aws_cloudwatch_event_target" "generator" {
-  rule = aws_cloudwatch_event_rule.generator_hourly.name
+  rule = aws_cloudwatch_event_rule.generator_daily.name
   arn  = aws_lambda_function.generator.arn
 }
 
@@ -82,5 +82,5 @@ resource "aws_lambda_permission" "eventbridge" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.generator.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.generator_hourly.arn
+  source_arn    = aws_cloudwatch_event_rule.generator_daily.arn
 }
