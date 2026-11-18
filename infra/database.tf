@@ -40,6 +40,7 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids  = [aws_security_group.database.id]
   backup_retention_period = 1
   skip_final_snapshot     = true
+  deletion_protection     = true
   apply_immediately       = true
 }
 
