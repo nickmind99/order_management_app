@@ -108,6 +108,7 @@ resource "aws_instance" "server" {
 
   lifecycle {
     ignore_changes = [ami]
+    create_before_destroy = true
   }
 }
 
